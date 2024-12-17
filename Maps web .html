@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Traffic Control with Timer and Fine</title>
+  <style>
+    body { font-family: Arial, sans-serif; background-color: #f4f4f9; margin: 0; padding: 0; }
+    h1 { text-align: center; margin-top: 20px; font-size: 22px; color: #333; }
+    #mapCanvas { border: 2px solid #333; width: 100%; height: 300px; background-color: #f0f0f0; touch-action: none; cursor: crosshair; margin: 20px 0; }
+    .dot { position: absolute; width: 10px; height: 10px; background-color: red; border-radius: 50%; pointer-events: none; }
+    /* ছোট বক্সের মধ্যে কন্ট্রোল */
+    .tool-container, .status-container {
+      position: absolute;
+      padding: 15px;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      cursor: move;
+    }
+    .tool-container { width: 250px; }
+    .status-container { width: 250px; bottom: 20px; }
+    .tool-container input, .tool-container button { font-size: 12px; padding: 5px; margin-right: 10px; }
+    .tool-container button { background-color: #007bff; color: #fff; border: none; cursor: pointer; }
+    .tool-container button:hover { background-color: #0056b3; }
+    .status { text-align: center; margin-top: 20px; font-size: 18px; color: #333; }
+    #fineDuration { font-size: 14px; font-weight: bold; margin-top: 10px; }
+    footer { text-align: center; margin-top: 30px; font-size: 14px; color: #333; }
+    /* Builder section style */
+    .builder-section {
+      background-color: #e7e7e7;
+      padding: 10px;
+      text-align: center;
+      margin: 20px auto;
+      width: 300px;
+      border-radius: 8px;
+    }
+    .builder-section p {
+      font-size: 16px;
+      margin: 0;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Traffic Control with Timer and Fine</h1>
+  
+  <!-- ক্যানভাস: যেখানে রাস্তা আঁকা যাবে -->
+  <canvas id="mapCanvas"></canvas>
+
+  <!-- টুল কন্ট্রোল -->
+  <div class="tool-container" id="toolContainer">
+    <label for="lineWidth">Line Width:</label>
+    <input type="number" id="lineWidth" value="5" min="1" max="10" />
+    <label for="lineColor">Line Color:</label>
+    <input type="color" id="lineColor" value="#888888" />
+    <button onclick="clearCanvas()">Clear</button>
+    <label for="dotControl">Move Dot:</label>
+    <input type="range" id="dotControl" min="0" max="100" value="0" />
+  </div>
+
+  <!-- স্ট্যাটাস, জরিমানা এবং টাইমার -->
+  <div class="status-container" id="statusContainer">
+    <div id="timer">Time Remaining: 60 seconds</div>
+    <div id="fine">Fine: $0</div>
+    <div id="weather">Weather: Loading...</div>
+    <div id="fineDuration"></div> <!-- ফাইন ডিউরেশন দেখানোর জায়গা -->
+  </div>
+
+  <script>
+    // ক্যানভাস সেটআপ
+    const canvas = document.getElementById('mapCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = 300;
+
+    let drawing = false, lastX = 0, lastY = 0, points = [];
+    const lineWidthInput = document.getElementById('lineWidth');
+    const lineColorInput = document.getElementById('lineColor');
+    const dotControlInput = document.getElementById('dotControl');
+    const dotElement = document.createElement('div');
+    dotElement.classList.add('dot');
+    document.body.appendChild(dotElement);
+
+    // জরিমানা রেট ও টাইমার
+    let fineAmount = 0;
+    let timeRemaining = 60; // 60 সেকেন্ড
+    let timerInterval;
+    let fineInterval;
+    let fineStartTime = null;
+
+    // টাইমার চালু করা
+    function startTimer() {
+      timerInterval = setInterval(function() {
+        timeRemaining--;
+        document.getElementById('timer').innerText = `Time Remaining: ${timeRemaining} seconds`;
+
+        if (timeRemaining <= 0) {
+          clearInterval(timerInterval);
+          startFineCalculation();
+        }
+      }, 1000);
+    }
+
+    // জরিমানা গণনা শুরু করা
+    function startFineCalculation() {
+      fineStartTime = new Date();
+      alert("Fine collection has started!");
+
+      fineInterval = setInterval(function() {
+        fineAmount += 10;
+        document.getElementById('fine').innerText = `Fine: $${fineAmount}`;
+      }, 10000); // ১০ সেকেন্ডে একবার
+
+      // ফাইন নেওয়া শুরু হওয়ার পর টাইমারটি শুরু হবে
+      let fineDurationInterval = setInterval(function() {
+        let elapsedTime = Math.floor((new Date() - fineStartTime) / 1000);
+        document.getElementById('fineDuration').innerText = `Fine Duration: ${elapsedTime} seconds`;
+
+        // যদি জরিমানা এক মিনিট ধরে চলে, তাহলে বন্ধ হয়ে যাবে
+        if (elapsedTime >= 60) {
+          clearInterval(fineDurationInterval);
+          clearInterval(fineInterval); // জরিমানা বন্ধ
+          alert("Fine collection has ended after 1 minute!");
+        }
+      }, 1000); // প্রতি সেকেন্ডে একবার আপডেট
+    }
+
+    // আবহাওয়া তথ্য
+    function getWeather() {
+      document.getElementById('weather').innerText = 'Weather: Sunny, 25°C'; // শুধু উদাহরণ
+    }
+
+    // টাচ স্টার্ট (লাইনের প্রথম পয়েন্ট)
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      drawing = true;
+      points = [];
+      const touch = e.touches[0];
+      lastX = touch.clientX - canvas.offsetLeft;
+      lastY = touch.clientY - canvas.offsetTop;
+      points.push({x: lastX, y: lastY});
+      dotElement.style.left = `${lastX - 5}px`;
+      dotElement.style.top = `${lastY - 5}px`;
+    });
+
+    // টাচ মুভ (লাইনের পয়েন্ট আঁকা)
+    canvas.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (drawing) {
+        const touch = e.touches[0];
+        const currentX = touch.clientX - canvas.offsetLeft;
+        const currentY = touch.clientY - canvas.offsetTop;
+        points.push({x: currentX, y: currentY});
+        draw();
+      }
+    });
+
+    // টাচ এন্ড (আঁকা শেষ)
+    canvas.addEventListener('touchend', () => { drawing = false; ctx.beginPath(); });
+
+    // আঁকার ফাংশন
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.lineWidth = lineWidthInput.value;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = lineColorInput.value;
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      points.forEach(p => ctx.lineTo(p.x, p.y));
+      ctx.stroke();
+    }
+
+    // ডটের চলাচল
+    dotControlInput.addEventListener('input', () => {
+      const index = Math.floor((dotControlInput.value / 100) * (points.length - 1));
+      const dotPoint = points[index];
+      dotElement.style.left = `${dotPoint.x - 5}px`;
+      dotElement.style.top = `${dotPoint.y - 5}px`;
+    });
+
+    // ক্যানভাস পরিষ্কার করার ফাংশন
+    function clearCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      points = [];
+      dotElement.style.left = '-20px';
+      dotElement.style.top = '-20px';
+    }
+
+    // ড্র্যাগ ফাংশন
+    function makeDraggable(element) {
+      let isMouseDown = false;
+      let offsetX, offsetY;
+
+      element.addEventListener('mousedown', (e) => {
+        isMouseDown = true;
+        offsetX = e.clientX - element.offsetLeft;
+        offsetY = e.clientY - element.offsetTop;
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (isMouseDown) {
+          element.style.left = `${e.clientX - offsetX}px`;
+          element.style.top = `${e.clientY - offsetY}px`;
+        }
+      });
+
+      document.addEventListener('mouseup', () => {
+        isMouseDown = false;
+      });
+    }
+
+    // পেজ লোডের সময় শুরু
+    window.onload = function() {
+      startTimer();
+      getWeather();
+
+      // টুল কন্ট্রোল ও স্ট্যাটাস কন্ট্রোল ড্র্যাগেবল করা
+      makeDraggable(document.getElementById('toolContainer'));
+      makeDraggable(document.getElementById('statusContainer'));
+    }
+  </script>
+
+
+  </div>
+
+</body>
+</html>
